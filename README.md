@@ -8,6 +8,10 @@
 - **Kernel Tweaks:** اعمال تنظیمات تخصصی شبکه لینوکس (BBR, Buffer size) برای کاهش پکت‌لاست.
 - **مانیتورینگ زنده:** مشاهده وضعیت اتصال و ترافیک به صورت لحظه‌ای.
 
-### نحوه نصب و اجرا:
+### نحوه نصب و اجرا HA Proxy:
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Username/RepoName/main/gre.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/Rmin-ys/gre/refs/heads/main/gre.sh)
+
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/Rmin-ys/gre/refs/heads/main/socat.sh)
