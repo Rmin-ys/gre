@@ -10,4 +10,4 @@
 
 ### نحوه نصب و اجرا:
 ```bash
-wget -O gre.sh "آدرس_لینک_مستقیم_فایل_شما" && chmod +x gre.sh && ./gre.sh
+bash <(curl -Ls https://raw.githubusercontent.com/Username/RepoName/main/gre.sh)
