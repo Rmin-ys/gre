@@ -26,48 +26,91 @@ setup_mtu_mss() {
         TUN_MTU=1400
     fi
     
-    # Calculate MSS (MTU - 40)
     TUN_MSS=$((TUN_MTU - 40))
-    echo -e "${GREEN}MTU set to $TUN_MTU and MSS set to $TUN_MSS${NC}"
 }
 
-# --- Function: BBR Activation (Speed Optimization) ---
+# --- Function: BBR Activation ---
 enable_bbr() {
     if ! sysctl net.ipv4.tcp_congestion_control | grep -q "bbr"; then
-        echo -e "${YELLOW}Enabling BBR for better speed...${NC}"
         echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf
         echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf
-        sysctl -p
-        echo -e "${GREEN}BBR Enabled.${NC}"
+        sysctl -p > /dev/null
     fi
+}
+
+# --- Function: Create Tunnel & Services ---
+create_tunnel() {
+    local TYPE=$1 # IRAN or KHAREJ
+    
+    read -p "Enter GRE Number (1-9): " GRE_NUM
+    read -p "Enter Local IP (This Server): " LOCAL_IP
+    read -p "Enter Remote IP (Other Server): " REMOTE_IP
+    read -p "Enter Tunnel Internal IP (e.g., 10.0.0.1): " INT_IP
+    
+    TUN_NAME="gre$GRE_NUM"
+    
+    # 1. Create GRE Tunnel
+    ip tunnel add $TUN_NAME mode gre remote $REMOTE_IP local $LOCAL_IP ttl 255
+    ip addr add $INT_IP/30 dev $TUN_NAME
+    ip link set $TUN_NAME mtu $TUN_MTU
+    ip link set $TUN_NAME up
+    
+    # 2. Apply MSS Clamping (Crucial for GFW)
+    iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -o $TUN_NAME -j TCPMSS --set-mss $TUN_MSS
+    
+    # 3. Persistence (Create Systemd Service for Tunnel)
+    cat <<EOF > /etc/systemd/system/tun-$TUN_NAME.service
+[Unit]
+Description=GRE Tunnel $TUN_NAME
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ip tunnel add $TUN_NAME mode gre remote $REMOTE_IP local $LOCAL_IP ttl 255
+ExecStart=/sbin/ip addr add $INT_IP/30 dev $TUN_NAME
+ExecStart=/sbin/ip link set $TUN_NAME mtu $TUN_MTU
+ExecStart=/sbin/ip link set $TUN_NAME up
+ExecStart=/sbin/iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -o $TUN_NAME -j TCPMSS --set-mss $TUN_MSS
+ExecStop=/sbin/ip link set $TUN_NAME down
+ExecStop=/sbin/ip tunnel del $TUN_NAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable tun-$TUN_NAME.service
+    echo -e "${GREEN}Tunnel $TUN_NAME created and persisted!${NC}"
 }
 
 # --- Main Menu ---
 clear
 echo -e "${GREEN}############################################${NC}"
-echo -e "${GREEN}#      Sepehr GRE Forwarder - Pro V1.1     #${NC}"
+echo -e "${GREEN}#      Sepehr GRE Forwarder - Pro V1.2     #${NC}"
 echo -e "${GREEN}############################################${NC}"
-echo -e "1) IRAN SETUP (Local Server)"
-echo -e "2) KHAREJ SETUP (Remote Server)"
-echo -e "3) Services Management"
-echo -e "4) Uninstall & Clean"
-echo -e "5) Exit"
+echo -e "1) IRAN SETUP"
+echo -e "2) KHAREJ SETUP"
+echo -e "3) Uninstall & Clean All"
+echo -e "4) Exit"
 read -p "Select option: " main_choice
 
 case $main_choice in
     1|2)
-        # اجرای تنظیمات MTU قبل از شروع ستاپ
         setup_mtu_mss
         enable_bbr
-        
-        # در اینجا متغیرهای TUN_MTU و TUN_MSS آماده استفاده در بخش ساخت تونل هستند.
-        # TODO: اضافه کردن منطق ساخت تونل GRE با استفاده از متغیرهای بالا
-        echo -e "\n${GREEN}Ready to setup tunnel with MTU $TUN_MTU...${NC}"
+        create_tunnel
+        if [[ "$main_choice" == "1" ]]; then
+            echo -e "${YELLOW}Now you should add your ports for forwarding... (Next Update)${NC}"
+        fi
         ;;
-    5)
-        exit 0
+    3)
+        echo -e "${RED}Cleaning all services and tunnels...${NC}"
+        systemctl stop tun-gre* 2>/dev/null
+        systemctl disable tun-gre* 2>/dev/null
+        rm /etc/systemd/system/tun-gre* 2>/dev/null
+        ip link delete gre1 2>/dev/null # Add more as needed
+        echo -e "${GREEN}Done.${NC}"
         ;;
-    *)
-        echo -e "${RED}Invalid option${NC}"
-        ;;
+    4) exit 0 ;;
 esac
