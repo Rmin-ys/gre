@@ -13,5 +13,7 @@
 bash <(curl -Ls https://raw.githubusercontent.com/Rmin-ys/gre/refs/heads/main/gre.sh)
 
 
+### نحوه نصب و اجرا socat:
+
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/Rmin-ys/gre/refs/heads/main/socat.sh)
